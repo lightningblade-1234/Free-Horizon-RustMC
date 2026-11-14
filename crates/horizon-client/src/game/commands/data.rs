@@ -29,6 +29,17 @@ fn set_key(tag: &mut Tag, key: &str, value: Tag) {
         c.insert(JavaString::from(key), value);
     }
 }
+/// `SummonCommand.spawnEntity`'s name for a kind no command target stands for:
+/// its entity type's. An item is the exception: `EntityType`'s factory leaves
+/// `ItemStack.EMPTY`, which `ItemEntity.readAdditionalSaveData` discards, and
+/// `ItemEntity.getName` reads that empty stack's `getItemName` — an empty
+/// component, not the type's name.
+pub(super) fn summon_type_name(kind: &str) -> Text {
+    if kind.trim_start_matches("minecraft:") == "item" {
+        return Text::empty();
+    }
+    Text::translate(&super::entity_name_key(kind), &[])
+}
 /// `EntityType.loadEntityRecursive` snaps every entity of the stack,
 /// passengers included, to the position (`/summon`, `native_summon`).
 pub(in crate::game) fn place_summoned(tag: &mut Tag, pos: [f64; 3]) {
@@ -918,6 +929,13 @@ impl Game<'_> {
                 let f = self.falling.iter_mut().find(|f| f.id == id)?;
                 Some(&mut f.saved.get_or_insert_with(|| Box::new((uuid, empty()))).1)
             }
+            // `tags_of` reads a spawner's compound, and its chunk saves it
+            // (`ominous_item_spawner_to_nbt`); without this arm `/tag` wrote
+            // nothing and still reported success.
+            Target::Spawner(id) => {
+                let s = self.ominous_spawners.iter_mut().find(|s| s.id == id)?;
+                Some(&mut **s.raw.get_or_insert_with(|| Box::new(empty())))
+            }
             _ => None,
         }
     }
@@ -927,6 +945,14 @@ impl Game<'_> {
         let Some(raw) = self.raw_mut(t) else {
             return false;
         };
+        // `Entity.saveWithoutId` writes `Tags` only for a nonempty live set:
+        // removing the last tag leaves no key.
+        if tags.is_empty() {
+            if let Tag::Compound(map) = raw {
+                map.remove(&"Tags".into());
+            }
+            return true;
+        }
         let list = tags
             .iter()
             .map(|s| Tag::String(s.as_str().into()))
@@ -1558,9 +1584,12 @@ impl Game<'_> {
                                 .collect(),
                         )
                     };
+                    // `TagCommand.listTags` tracks each entity's tag count and
+                    // sends with `sendFeedback`'s default element type, NON_ZERO:
+                    // the single form names the one entity that has tags.
                     tracker
                         .message(
-                            true,
+                            false,
                             None,
                             |h, _| {
                                 Text::translate(
@@ -1577,7 +1606,9 @@ impl Game<'_> {
                         )?
                         .0
                 };
-                self.feedback(message);
+                // `TagCommand.listTags` reports with `sendFeedback(source, false, …)`:
+                // the operators are not told, unlike `addTag`/`removeTag` (`true`).
+                self.feedback_unbroadcast(message);
                 return Ok(count as i32);
             }
         }?;
