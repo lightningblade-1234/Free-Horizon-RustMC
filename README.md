@@ -119,7 +119,9 @@ The fork's **README.md is preserved during upstream sync**, including when upstr
 
 To start/restart the recurring poller, run **Sync upstream** from Actions with **keep_running** enabled. Disable the workflow to stop it. For a single check, clear **keep_running**; an existing recurring run keeps its own schedule.
 
-After a successful sync, it explicitly starts **checks**, plus a launcher release build when launcher/dependency inputs changed. These checks catch compilation/behavior failures that a clean Git merge cannot detect. Pull the updated fork locally and rerun source setup to rebuild your own executable.
+The sync authenticates with the repository Actions secret **UPSTREAM_SYNC_TOKEN**. Its token needs **Contents: Read and write** and **Workflows: Read and write** permission for this fork (a classic token needs `repo` and `workflow` scopes). The default `GITHUB_TOKEN` cannot push upstream workflow-file changes.
+
+After a successful sync, its authenticated push automatically starts **checks**, plus a launcher release build when launcher/dependency inputs changed. These checks catch compilation/behavior failures that a clean Git merge cannot detect. Pull the updated fork locally and rerun source setup to rebuild your own executable.
 
 This fork keeps **Sync upstream**, **checks** (Python tooling, formatting, lint and Rust tests) and **Offline launcher release** enabled. Inherited upstream service/release automations are disabled here because their private runners, signing keys and project services are not part of this fork. Parity harnesses remain available for local development; those disabled workflows do not constitute a vanilla parity run.
 

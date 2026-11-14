@@ -38,6 +38,8 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          # Contents + Workflows write permission is required to sync workflow files.
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -51,17 +53,7 @@ jobs:
       - name: Merge and push only without conflicts
         id: merge
         run: python tools/sync_upstream.py
-      # Pushes with GITHUB_TOKEN do not trigger other push workflows. Dispatch explicitly.
-      - name: Start source checks after an update
-        if: steps.merge.outputs.status == 'updated'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run ci.yml --ref main -f source_only=true
-      - name: Build a fork launcher release when its inputs changed
-        if: steps.merge.outputs.status == 'updated' && steps.merge.outputs.launcher_changed == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run offline-launcher.yml --ref main
+      # UPSTREAM_SYNC_TOKEN pushes trigger checks and path-filtered launcher builds.
       # Reschedule after errors and conflicts too, so a resolved conflict or a
       # transient fetch failure cannot silently stop the automatic merger.
       # Cancelling/disabling the workflow stops the recurring poller.
